@@ -83,7 +83,6 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
-		// TODO(king-11) need to pass in collation here
 		ob := engine.OrderByParams{
 			Col:               colNumber,
 			WeightStringCol:   -1,

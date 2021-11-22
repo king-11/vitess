@@ -330,7 +330,6 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 			}
 		}
 
-		// TODO(king-11) pass in collation here
 		ob := engine.OrderByParams{
 			Col:               colNumber,
 			WeightStringCol:   -1,
