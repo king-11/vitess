@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -103,9 +102,10 @@ type vdiff struct {
 
 // compareColInfo contains the metadata for a column of the table being diffed
 type compareColInfo struct {
-	colIndex          int  // index of the column in the filter's select
-	weightStringIndex int  // index of the weight_string() requested for each text column
-	isPK              bool // is this column part of the primary key
+	colIndex          int           // index of the column in the filter's select
+	weightStringIndex int           // index of the weight_string() requested for each text column
+	isPK              bool          // is this column part of the primary key
+	collation         collations.ID // collation of the column
 }
 
 // tableDiffer performs a diff for one table in the workflow.
@@ -495,6 +495,8 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, wrapWeightString(targetSelect.SelectExprs[i]))
 			// Update the column number to point at the weight_string column instead.
 			td.compareCols[i].weightStringIndex = len(sourceSelect.SelectExprs) - 1
+			// need to update this with actual collation if any found
+			td.compareCols[i].collation = collations.Unknown
 		}
 	}
 
@@ -560,7 +562,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compare
 		if cpk.weightStringIndex != cpk.colIndex {
 			weightStringCol = cpk.weightStringIndex
 		}
-		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol})
+		ob = append(ob, engine.OrderByParams{Col: cpk.colIndex, WeightStringCol: weightStringCol, CollationID: cpk.collation})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
@@ -1056,12 +1058,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		}
 		var c int
 		var err error
-		if sourceRow[compareIndex].IsText() && targetRow[compareIndex].IsText() {
-			c = bytes.Compare(sourceRow[compareIndex].ToBytes(), targetRow[compareIndex].ToBytes())
-		} else {
-			// TODO(king-11) make collation aware
-			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collations.Unknown)
-		}
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], col.collation)
 		if err != nil {
 			return 0, err
 		}
